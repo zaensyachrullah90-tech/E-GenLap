@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-// BEDA DENGAN SEBELUMNYA: Sekarang kita import dari 'firebase/database' (Realtime DB), bukan firestore!
 import { getDatabase, ref, set, get, child, update, push, onValue, query, orderByChild, equalTo, serverTimestamp } from 'firebase/database';
 import { ShieldAlert, LogOut, CheckCircle2, Upload, FileText, Database, CreditCard, Play, Settings, QrCode, Building, Phone, Info } from 'lucide-react';
 
@@ -10,47 +9,37 @@ import { ShieldAlert, LogOut, CheckCircle2, Upload, FileText, Database, CreditCa
 // ============================================================================
 const ENV = {
   GEMINI_API_KEY: import.meta.env?.VITE_GEMINI_API_KEY || "AIzaSyBZK_ywNsBVLKBs9dejOvmVx9Ib6yfPF-g", 
-  WEBHOOK_GAS_URL: import.meta.env?.VITE_WEBHOOK_GAS_URL || "https://script.google.com/macros/s/AKfycbzqkUgAKQzWOFi8gXXPkO8DY833L0MLDwDMCK5K6u_LnFO8xgrpG8882YNu52Ssrsrs/exec",
-  MASTER_DRIVE_LINK: import.meta.env?.VITE_MASTER_DRIVE_LINK || "https://drive.google.com/drive/folders/1ky6sbBxgpmZ2uNEBqpLAFdYfdL7XTbOE",
-  TEMPLATE_DOC_ID: import.meta.env?.VITE_TEMPLATE_DOC_ID || "1xaw6bcjPr6mpcFfSvV2sd3ZVJHgKlz6UEO1PsgXU8A"
+  WEBHOOK_GAS_URL: import.meta.env?.VITE_WEBHOOK_GAS_URL || "",
+  MASTER_DRIVE_LINK: import.meta.env?.VITE_MASTER_DRIVE_LINK || "",
+  TEMPLATE_DOC_ID: import.meta.env?.VITE_TEMPLATE_DOC_ID || ""
 };
 
 // ============================================================================
-// 🔥 FIREBASE SETUP
+// 🔥 PASTE KONFIGURASI FIREBASE ANDA DI BAWAH INI
 // ============================================================================
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyAe-mQ8o9VQUE-bjvH1_zFF4BgJiZZ84B8",
   authDomain: "e-genlap.firebaseapp.com",
-  databaseURL: "https://e-genlap-default-rtdb.firebaseio.com",
+  // PASTIKAN URL DI BAWAH INI BENAR SESUAI FIREBASE CONSOLE ANDA:
+  databaseURL: "https://e-genlap-default-rtdb.firebaseio.com", 
   projectId: "e-genlap",
   storageBucket: "e-genlap.firebasestorage.app",
   messagingSenderId: "717106227570",
   appId: "1:717106227570:web:40ae5a838eec42efea95eb"
 };
+// ============================================================================
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getDatabase(app); // Menggunakan Realtime Database
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'egenlap-pro-app';
+const db = getDatabase(app); 
+const appId = firebaseConfig.appId.replace(/:/g, '-'); 
 
-// Path Database (Realtime DB menggunakan path seperti folder)
 const USERS_PATH = `artifacts/${appId}/public/data/users`;
 const TRANSACTIONS_PATH = `artifacts/${appId}/public/data/transactions`;
 const SETTINGS_PATH = `artifacts/${appId}/public/data/settings/general_config`;
 
-const DEFAULT_SETTINGS = {
-  wa_admin: "6285349450549",
-  bank_nama: "BCA",
-  bank_rekening: "1234567890",
-  bank_pemilik: "M. Zaen Syachrullah",
-  qris_url: "",
-  harga_per_token: 1000
-};
+const DEFAULT_SETTINGS = { wa_admin: "6285349450549", bank_nama: "BCA", bank_rekening: "1234567890", bank_pemilik: "M. Zaen Syachrullah", qris_url: "", harga_per_token: 1000 };
 
-// ============================================================================
-// 🖥️ KOMPONEN UTAMA
-// ============================================================================
 export default function EGenLapApp() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -58,7 +47,6 @@ export default function EGenLapApp() {
   const [view, setView] = useState('login'); 
   const [loading, setLoading] = useState(true);
 
-  // 1. Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -73,28 +61,25 @@ export default function EGenLapApp() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Fetch Pengaturan Sistem Global dari Realtime DB
   useEffect(() => {
     const fetchSettings = async () => {
-      const dbRef = ref(db);
-      const snapshot = await get(child(dbRef, SETTINGS_PATH));
-      if (snapshot.exists()) {
-        setAppSettings(snapshot.val());
-      } else {
-        await set(ref(db, SETTINGS_PATH), DEFAULT_SETTINGS);
-      }
+      try {
+        const snapshot = await get(child(ref(db), SETTINGS_PATH));
+        if (snapshot.exists()) setAppSettings(snapshot.val());
+      } catch (err) { console.error("Error fetch settings:", err); }
     };
     fetchSettings();
   }, []);
 
   const fetchUserData = async (uid) => {
-    const dbRef = ref(db);
-    const snapshot = await get(child(dbRef, `${USERS_PATH}/${uid}`));
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      setUserData(data);
-      setView(data.role === 'admin' ? 'admin' : 'dashboard');
-    }
+    try {
+      const snapshot = await get(child(ref(db), `${USERS_PATH}/${uid}`));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setUserData(data);
+        setView(data.role === 'admin' ? 'admin' : 'dashboard');
+      }
+    } catch (err) { console.error("Error fetch user data:", err); }
   };
 
   if (loading) return <div className="flex h-screen items-center justify-center bg-[#0f1115]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a3e635]"></div></div>;
@@ -137,7 +122,7 @@ export default function EGenLapApp() {
 }
 
 // ============================================================================
-// 1. KOMPONEN AUTENTIKASI (REALTIME DB)
+// KOMPONEN AUTENTIKASI (DENGAN DETEKTOR ERROR)
 // ============================================================================
 function AuthView() {
   const [isLogin, setIsLogin] = useState(false); 
@@ -146,7 +131,6 @@ function AuthView() {
   const [nama, setNama] = useState('');
   const [nip, setNip] = useState('');
   const [jabatan, setJabatan] = useState('KATIM KABKOT');
-  const [driveUrl, setDriveUrl] = useState('');
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -162,24 +146,26 @@ function AuthView() {
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         
-        // Simpan data ke Realtime DB
+        // Coba simpan ke Realtime Database
         await set(ref(db, `${USERS_PATH}/${userCredential.user.uid}`), {
           uid: userCredential.user.uid,
           nama: nama,
           nip: nip,
           jabatan: jabatan,
           email: email,
-          drive_folder_id: driveUrl, 
+          drive_folder_id: '', 
           role: 'user', 
           token_balance: 2, 
           createdAt: serverTimestamp()
         });
       }
     } catch (err) {
-      let errorMsg = err.message.replace('Firebase:', '');
+      console.error("FULL ERROR DETAIL:", err); 
+      // TAMPILKAN ERROR ASLI KE LAYAR AGAR KITA TAHU PENYAKITNYA
+      let errorMsg = `GAGAL SISTEM: [${err.code}] ${err.message}`;
       if(err.code === 'auth/invalid-credential') errorMsg = "Email atau Password salah!";
-      if(err.code === 'auth/email-already-in-use') errorMsg = "Email ini sudah terdaftar!";
-      if(err.code === 'auth/weak-password') errorMsg = "Password minimal 6 karakter!";
+      if(err.code === 'auth/email-already-in-use') errorMsg = "Email ini sudah terdaftar! Silakan Login.";
+      if(err.code === 'auth/weak-password') errorMsg = "Password terlalu lemah, minimal 6 karakter!";
       setError(errorMsg);
     } finally {
       setIsLoading(false); 
@@ -191,44 +177,23 @@ function AuthView() {
       <div className="bg-[#161b22] border border-gray-800 p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-xl">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-black text-white tracking-tight">{isLogin ? 'Login Sistem' : 'Registrasi Sistem'}</h2>
-          <p className="text-gray-400 text-sm mt-2 font-medium">E-GenLap PKH Terintegrasi</p>
         </div>
 
-        {error && <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-xl text-sm mb-6 flex items-center gap-2"><Info size={16}/> {error}</div>}
+        {error && <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-xl text-sm mb-6 font-mono text-xs">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <>
-              <div>
-                <input type="text" required value={nama} onChange={(e) => setNama(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="Nama Lengkap" />
-              </div>
-              <div>
-                <input type="text" required value={nip} onChange={(e) => setNip(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="199006212025211050 (NIP/NIK)" />
-              </div>
-              <div>
-                <select value={jabatan} onChange={(e) => setJabatan(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition font-bold">
-                  <option value="KATIM KABKOT">KATIM KABKOT</option>
-                  <option value="PENDAMPING SOSIAL">PENDAMPING SOSIAL</option>
-                  <option value="ADMINISTRATOR PANGKALAN DATA">ADMIN PANGKALAN DATA</option>
-                  <option value="PEKERJA SOSIAL">PEKERJA SOSIAL</option>
-                </select>
-              </div>
+              <input type="text" required value={nama} onChange={(e) => setNama(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none" placeholder="Nama Lengkap" />
+              <input type="text" required value={nip} onChange={(e) => setNip(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none" placeholder="NIP/NIK" />
+              <select value={jabatan} onChange={(e) => setJabatan(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none font-bold">
+                <option value="KATIM KABKOT">KATIM KABKOT</option>
+                <option value="PENDAMPING SOSIAL">PENDAMPING SOSIAL</option>
+              </select>
             </>
           )}
-          
-          <div>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="zaensyachrullah90@gmail.com" />
-          </div>
-          
-          <div>
-            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="Buat Password (Min 6 Karakter)" />
-          </div>
-
-          {!isLogin && (
-            <div>
-              <input type="text" value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="URL Drive Folder Anda (Opsional)" />
-            </div>
-          )}
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none" placeholder="Email Akun" />
+          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none" placeholder="Password (Min 6 Karakter)" />
           
           <button type="submit" disabled={isLoading} className="w-full bg-[#a3e635] text-black font-black text-lg py-4 rounded-xl hover:bg-[#84cc16] transition flex justify-center items-center mt-4">
             {isLoading ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div> : (isLogin ? 'Masuk' : 'Daftar Sekarang')}
@@ -237,9 +202,8 @@ function AuthView() {
 
         <div className="mt-8 text-center">
           <p className="text-sm text-gray-500 font-medium">
-            {isLogin ? "Belum punya akun? " : "Sudah punya akun? "}
             <button onClick={() => setIsLogin(!isLogin)} className="text-[#a3e635] font-bold hover:underline">
-              {isLogin ? 'Daftar di sini' : 'Kembali Login'}
+              {isLogin ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Login'}
             </button>
           </p>
         </div>
@@ -249,7 +213,7 @@ function AuthView() {
 }
 
 // ============================================================================
-// 2. DASHBOARD USER (REALTIME DB)
+// KOMPONEN DASHBOARD USER
 // ============================================================================
 function UserDashboard({ userData, setView }) {
   const [driveLink, setDriveLink] = useState(userData.drive_folder_id || '');
@@ -287,7 +251,7 @@ function UserDashboard({ userData, setView }) {
       - Status: ${formData.status}
       - Detail: ${formData.keterangan}
       
-      Aturan: Gunakan bahasa Indonesia baku, formal, objektif. Langsung masuk ke isi laporan tanpa basa basi pembuka surat.`;
+      Aturan: Gunakan bahasa Indonesia baku, formal, objektif.`;
       
       const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${ENV.GEMINI_API_KEY}`, {
         method: 'POST',
@@ -295,7 +259,7 @@ function UserDashboard({ userData, setView }) {
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
       const aiData = await aiResponse.json();
-      const narasiText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "Laporan kegiatan terlaksana dengan baik dan lancar sesuai prosedur operasional.";
+      const narasiText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "Laporan kegiatan terlaksana dengan baik dan lancar.";
 
       setMessage('📄 Membuat PDF & Menyimpan ke Drive...');
 
@@ -350,7 +314,7 @@ function UserDashboard({ userData, setView }) {
         <div className="bg-[#161b22] border border-gray-800 p-6 rounded-2xl shadow-lg">
           <h3 className="font-bold text-white mb-3 flex items-center gap-2"><Database size={18} className="text-[#a3e635]"/> Target Google Drive</h3>
           <p className="text-sm text-gray-400 mb-4 leading-relaxed">
-            Masukkan <b>ID Folder / URL Folder</b> Drive tujuan. Pastikan folder disetting "Siapa saja yang memiliki link - Editor".
+            Masukkan <b>ID Folder</b> Drive tujuan. Pastikan folder disetting Editor publik.
           </p>
           <div className="space-y-3">
             <input 
@@ -414,7 +378,7 @@ function UserDashboard({ userData, setView }) {
 }
 
 // ============================================================================
-// 3. TOP UP VIEW (REALTIME DB)
+// KOMPONEN TOPUP
 // ============================================================================
 function TopUpView({ userData, setView, appSettings }) {
   const [paket, setPaket] = useState(10);
@@ -425,7 +389,6 @@ function TopUpView({ userData, setView, appSettings }) {
     if(!buktiUrl) return alert("Mohon cantumkan link bukti transfer Anda!");
     setLoading(true);
     try {
-      // Menggunakan push() untuk list data di Realtime DB
       await push(ref(db, TRANSACTIONS_PATH), {
         userId: userData.uid,
         nama: userData.nama,
@@ -453,16 +416,11 @@ function TopUpView({ userData, setView, appSettings }) {
       <div className="grid md:grid-cols-2 gap-8">
         <div className="bg-[#161b22] border border-gray-800 p-8 rounded-2xl shadow-lg">
           <h2 className="text-2xl font-black text-white mb-2">Isi Ulang Token</h2>
-          <p className="text-gray-400 text-sm mb-6">Pilih paket sesuai kebutuhan laporan bulanan.</p>
-
-          <div className="space-y-4 mb-8">
+          <div className="space-y-4 mb-8 mt-4">
             {[10, 30, 50, 100].map(jml => (
               <label key={jml} className={`block p-4 border rounded-xl cursor-pointer transition-all ${paket === jml ? 'border-[#a3e635] bg-[#a3e635]/10 shadow-md' : 'border-gray-700 hover:border-gray-600 bg-[#0d1117]'}`}>
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paket === jml ? 'border-[#a3e635]' : 'border-gray-600'}`}>
-                      {paket === jml && <div className="w-2.5 h-2.5 bg-[#a3e635] rounded-full"></div>}
-                    </div>
                     <span className="font-bold text-white text-lg">{jml} Laporan</span>
                   </div>
                   <span className="font-black text-[#a3e635] text-lg">Rp {(jml * appSettings.harga_per_token).toLocaleString('id-ID')}</span>
@@ -512,7 +470,7 @@ function TopUpView({ userData, setView, appSettings }) {
 }
 
 // ============================================================================
-// 4. ADMIN DASHBOARD (REALTIME DB)
+// KOMPONEN ADMIN
 // ============================================================================
 function AdminDashboard({ userData, appSettings, setAppSettings }) {
   const [activeTab, setActiveTab] = useState('transaksi'); 
@@ -521,7 +479,6 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   useEffect(() => {
-    // Listen transaksi pending menggunakan Realtime DB query
     const dbRef = ref(db, TRANSACTIONS_PATH);
     const pendingQuery = query(dbRef, orderByChild('status'), equalTo('pending'));
     
@@ -533,7 +490,7 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
       setTransactions(data);
     });
     
-    return () => unsubscribe(); // Cleanup listener
+    return () => unsubscribe(); 
   }, []);
 
   const handleApprove = async (trx) => {
@@ -543,7 +500,6 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
         const userSnap = await get(userRef);
         const currentToken = userSnap.val().token_balance || 0;
 
-        // Update token & status transaksi
         await update(userRef, { token_balance: currentToken + trx.jumlah_token });
         await update(ref(db, `${TRANSACTIONS_PATH}/${trx.id}`), { status: 'approved' });
         
@@ -573,7 +529,6 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
         <h2 className="text-2xl font-black flex items-center gap-3">
           <ShieldAlert className="text-red-500" size={28} /> Control Panel Admin
         </h2>
-        <p className="text-gray-400 mt-1 text-sm">Kelola transaksi dan pengaturan sistem E-GenLap.</p>
       </div>
 
       <div className="flex border-b border-gray-800 bg-[#0d1117]">
@@ -598,32 +553,25 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                   <thead>
                     <tr className="bg-[#0d1117] text-gray-400 text-sm">
-                      <th className="p-4 font-bold">Tanggal</th>
                       <th className="p-4 font-bold">Pemohon</th>
                       <th className="p-4 font-bold">Pesanan</th>
                       <th className="p-4 font-bold">Nominal</th>
-                      <th className="p-4 font-bold">Bukti</th>
                       <th className="p-4 font-bold text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {transactions.map(trx => (
                       <tr key={trx.id} className="border-b border-gray-800 hover:bg-[#0d1117] transition">
-                        <td className="p-4 text-sm text-gray-400 font-medium">
-                           {trx.tanggal ? new Date(trx.tanggal).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) : 'Baru Saja'}
-                        </td>
                         <td className="p-4">
                           <p className="font-bold text-white">{trx.nama}</p>
                           <p className="text-xs text-gray-500">{trx.email}</p>
                         </td>
                         <td className="p-4 text-[#a3e635] font-black">+{trx.jumlah_token} Laporan</td>
                         <td className="p-4 font-bold text-white">Rp {trx.total_harga?.toLocaleString('id-ID')}</td>
-                        <td className="p-4">
-                          <a href={trx.bukti_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 bg-[#21262d] text-[#a3e635] px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-[#30363d] transition">
-                            <FileText size={14} /> Cek Transfer
+                        <td className="p-4 text-right flex gap-2 justify-end">
+                          <a href={trx.bukti_url} target="_blank" rel="noreferrer" className="bg-[#21262d] text-[#a3e635] px-3 py-2 rounded-lg text-xs font-bold hover:bg-[#30363d] transition">
+                            Cek Bukti
                           </a>
-                        </td>
-                        <td className="p-4 text-right">
                           <button onClick={() => handleApprove(trx)} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-bold transition">
                             Approve
                           </button>
@@ -639,12 +587,10 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
 
         {activeTab === 'pengaturan' && (
           <form onSubmit={handleSaveSettings} className="max-w-2xl bg-[#0d1117] p-6 md:p-8 rounded-xl border border-gray-800">
-            <h3 className="text-lg font-bold text-white mb-6 border-b border-gray-700 pb-2">Konfigurasi Pembayaran & Kontak</h3>
-            
             <div className="space-y-5">
               <div className="grid md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-bold text-gray-400 mb-1">Nomor WhatsApp Admin</label>
+                  <label className="block text-sm font-bold text-gray-400 mb-1">WhatsApp Admin</label>
                   <input type="text" required value={formSettings.wa_admin} onChange={(e) => setFormSettings({...formSettings, wa_admin: e.target.value})} className="w-full bg-[#161b22] border border-gray-700 text-white rounded-lg p-2.5 focus:border-[#a3e635] outline-none" />
                 </div>
                 <div>
@@ -654,7 +600,6 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
               </div>
 
               <div className="bg-[#161b22] p-5 rounded-lg border border-gray-700 space-y-4">
-                <h4 className="font-bold text-white flex items-center gap-2"><Building size={16} className="text-[#a3e635]"/> Informasi Rekening</h4>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Nama Bank</label>
@@ -672,12 +617,12 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1 flex items-center gap-2"><QrCode size={16}/> URL Foto QRIS (Opsional)</label>
+                <label className="block text-sm font-bold text-gray-400 mb-1 flex items-center gap-2">URL Foto QRIS (Opsional)</label>
                 <input type="text" value={formSettings.qris_url} onChange={(e) => setFormSettings({...formSettings, qris_url: e.target.value})} className="w-full bg-[#161b22] border border-gray-700 text-white rounded-lg p-2.5 focus:border-[#a3e635] outline-none" />
               </div>
 
               <button type="submit" disabled={isSavingSettings} className="w-full bg-[#a3e635] text-black font-black py-3.5 rounded-xl hover:bg-[#84cc16] transition shadow-md mt-4">
-                {isSavingSettings ? 'Menyimpan Perubahan...' : 'Simpan Semua Pengaturan'}
+                {isSavingSettings ? 'Menyimpan...' : 'Simpan Pengaturan'}
               </button>
             </div>
           </form>
