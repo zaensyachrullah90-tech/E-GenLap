@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, onSnapshot, updateDoc, query, where, serverTimestamp } from 'firebase/firestore';
+// BEDA DENGAN SEBELUMNYA: Sekarang kita import dari 'firebase/database' (Realtime DB), bukan firestore!
+import { getDatabase, ref, set, get, child, update, push, onValue, query, orderByChild, equalTo, serverTimestamp } from 'firebase/database';
 import { ShieldAlert, LogOut, CheckCircle2, Upload, FileText, Database, CreditCard, Play, Settings, QrCode, Building, Phone, Info } from 'lucide-react';
 
 // ============================================================================
@@ -29,12 +30,13 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = getDatabase(app); // Menggunakan Realtime Database
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'egenlap-pro-app';
 
+// Path Database (Realtime DB menggunakan path seperti folder)
 const USERS_PATH = `artifacts/${appId}/public/data/users`;
 const TRANSACTIONS_PATH = `artifacts/${appId}/public/data/transactions`;
-const SETTINGS_PATH = `artifacts/${appId}/public/data/settings`;
+const SETTINGS_PATH = `artifacts/${appId}/public/data/settings/general_config`;
 
 const DEFAULT_SETTINGS = {
   wa_admin: "6285349450549",
@@ -70,22 +72,25 @@ export default function EGenLapApp() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Fetch Pengaturan Sistem Global
+  // 2. Fetch Pengaturan Sistem Global dari Realtime DB
   useEffect(() => {
     const fetchSettings = async () => {
-      const docRef = doc(db, SETTINGS_PATH, 'general_config');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) setAppSettings(docSnap.data());
-      else await setDoc(docRef, DEFAULT_SETTINGS);
+      const dbRef = ref(db);
+      const snapshot = await get(child(dbRef, SETTINGS_PATH));
+      if (snapshot.exists()) {
+        setAppSettings(snapshot.val());
+      } else {
+        await set(ref(db, SETTINGS_PATH), DEFAULT_SETTINGS);
+      }
     };
     fetchSettings();
   }, []);
 
   const fetchUserData = async (uid) => {
-    const userRef = doc(db, USERS_PATH, uid);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      const data = userSnap.data();
+    const dbRef = ref(db);
+    const snapshot = await get(child(dbRef, `${USERS_PATH}/${uid}`));
+    if (snapshot.exists()) {
+      const data = snapshot.val();
       setUserData(data);
       setView(data.role === 'admin' ? 'admin' : 'dashboard');
     }
@@ -131,7 +136,7 @@ export default function EGenLapApp() {
 }
 
 // ============================================================================
-// 1. KOMPONEN AUTENTIKASI
+// 1. KOMPONEN AUTENTIKASI (REALTIME DB)
 // ============================================================================
 function AuthView() {
   const [isLogin, setIsLogin] = useState(false); 
@@ -155,7 +160,9 @@ function AuthView() {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await setDoc(doc(db, USERS_PATH, userCredential.user.uid), {
+        
+        // Simpan data ke Realtime DB
+        await set(ref(db, `${USERS_PATH}/${userCredential.user.uid}`), {
           uid: userCredential.user.uid,
           nama: nama,
           nip: nip,
@@ -192,7 +199,7 @@ function AuthView() {
           {!isLogin && (
             <>
               <div>
-                <input type="text" required value={nama} onChange={(e) => setNama(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="M. Zaen Syachrullah" />
+                <input type="text" required value={nama} onChange={(e) => setNama(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="Nama Lengkap" />
               </div>
               <div>
                 <input type="text" required value={nip} onChange={(e) => setNip(e.target.value)} className="w-full bg-[#0d1117] border border-gray-700 text-gray-200 rounded-xl p-4 focus:border-[#a3e635] outline-none transition" placeholder="199006212025211050 (NIP/NIK)" />
@@ -241,7 +248,7 @@ function AuthView() {
 }
 
 // ============================================================================
-// 2. DASHBOARD USER
+// 2. DASHBOARD USER (REALTIME DB)
 // ============================================================================
 function UserDashboard({ userData, setView }) {
   const [driveLink, setDriveLink] = useState(userData.drive_folder_id || '');
@@ -253,7 +260,7 @@ function UserDashboard({ userData, setView }) {
   const handleSaveDriveLink = async () => {
     setSavingLink(true);
     try {
-      await updateDoc(doc(db, USERS_PATH, userData.uid), { drive_folder_id: driveLink });
+      await update(ref(db, `${USERS_PATH}/${userData.uid}`), { drive_folder_id: driveLink });
       alert("✅ Link Folder Drive Berhasil Disimpan!");
     } catch (err) {
       alert("❌ Gagal menyimpan link. Coba lagi.");
@@ -306,7 +313,7 @@ function UserDashboard({ userData, setView }) {
         })
       });
 
-      await updateDoc(doc(db, USERS_PATH, userData.uid), {
+      await update(ref(db, `${USERS_PATH}/${userData.uid}`), {
         token_balance: userData.token_balance - 1
       });
 
@@ -324,7 +331,6 @@ function UserDashboard({ userData, setView }) {
 
   return (
     <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
-      {/* Panel Kiri */}
       <div className="space-y-6">
         <div className="bg-[#161b22] border border-gray-800 p-6 rounded-2xl shadow-lg">
           <div className="flex justify-between items-center mb-4">
@@ -360,7 +366,6 @@ function UserDashboard({ userData, setView }) {
         </div>
       </div>
 
-      {/* Panel Kanan */}
       <div className="lg:col-span-2 bg-[#161b22] border border-gray-800 p-6 md:p-8 rounded-2xl shadow-lg relative overflow-hidden">
         <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
           <Upload className="text-[#a3e635]"/> Buat Laporan Harian
@@ -408,7 +413,7 @@ function UserDashboard({ userData, setView }) {
 }
 
 // ============================================================================
-// 3. TOP UP VIEW
+// 3. TOP UP VIEW (REALTIME DB)
 // ============================================================================
 function TopUpView({ userData, setView, appSettings }) {
   const [paket, setPaket] = useState(10);
@@ -419,7 +424,8 @@ function TopUpView({ userData, setView, appSettings }) {
     if(!buktiUrl) return alert("Mohon cantumkan link bukti transfer Anda!");
     setLoading(true);
     try {
-      await addDoc(collection(db, TRANSACTIONS_PATH), {
+      // Menggunakan push() untuk list data di Realtime DB
+      await push(ref(db, TRANSACTIONS_PATH), {
         userId: userData.uid,
         nama: userData.nama,
         email: userData.email,
@@ -505,7 +511,7 @@ function TopUpView({ userData, setView, appSettings }) {
 }
 
 // ============================================================================
-// 4. ADMIN DASHBOARD
+// 4. ADMIN DASHBOARD (REALTIME DB)
 // ============================================================================
 function AdminDashboard({ userData, appSettings, setAppSettings }) {
   const [activeTab, setActiveTab] = useState('transaksi'); 
@@ -514,24 +520,31 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, TRANSACTIONS_PATH), where("status", "==", "pending"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // Listen transaksi pending menggunakan Realtime DB query
+    const dbRef = ref(db, TRANSACTIONS_PATH);
+    const pendingQuery = query(dbRef, orderByChild('status'), equalTo('pending'));
+    
+    const unsubscribe = onValue(pendingQuery, (snapshot) => {
       const data = [];
-      snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+      snapshot.forEach(childSnapshot => {
+        data.push({ id: childSnapshot.key, ...childSnapshot.val() });
+      });
       setTransactions(data);
     });
-    return () => unsubscribe();
+    
+    return () => unsubscribe(); // Cleanup listener
   }, []);
 
   const handleApprove = async (trx) => {
     if(window.confirm(`Yakin menyetujui penambahan ${trx.jumlah_token} Token untuk ${trx.nama}?`)) {
       try {
-        const userRef = doc(db, USERS_PATH, trx.userId);
-        const userSnap = await getDoc(userRef);
-        const currentToken = userSnap.data().token_balance || 0;
+        const userRef = ref(db, `${USERS_PATH}/${trx.userId}`);
+        const userSnap = await get(userRef);
+        const currentToken = userSnap.val().token_balance || 0;
 
-        await updateDoc(userRef, { token_balance: currentToken + trx.jumlah_token });
-        await updateDoc(doc(db, TRANSACTIONS_PATH, trx.id), { status: 'approved' });
+        // Update token & status transaksi
+        await update(userRef, { token_balance: currentToken + trx.jumlah_token });
+        await update(ref(db, `${TRANSACTIONS_PATH}/${trx.id}`), { status: 'approved' });
         
         alert("Pembayaran disetujui, token otomatis masuk!");
       } catch (error) {
@@ -544,7 +557,7 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
     e.preventDefault();
     setIsSavingSettings(true);
     try {
-      await setDoc(doc(db, SETTINGS_PATH, 'general_config'), formSettings);
+      await set(ref(db, SETTINGS_PATH), formSettings);
       setAppSettings(formSettings);
       alert("✅ Pengaturan Sistem Berhasil Diperbarui!");
     } catch (err) {
@@ -596,7 +609,7 @@ function AdminDashboard({ userData, appSettings, setAppSettings }) {
                     {transactions.map(trx => (
                       <tr key={trx.id} className="border-b border-gray-800 hover:bg-[#0d1117] transition">
                         <td className="p-4 text-sm text-gray-400 font-medium">
-                           {trx.tanggal ? new Date(trx.tanggal.toDate()).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) : 'Baru Saja'}
+                           {trx.tanggal ? new Date(trx.tanggal).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) : 'Baru Saja'}
                         </td>
                         <td className="p-4">
                           <p className="font-bold text-white">{trx.nama}</p>
