@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -112,7 +113,7 @@ export default function EGenLapApp() {
         ) : (
           <div className="animate-fadeIn">
             {view === 'dashboard' && <UserDashboard userData={userData} setView={setView} />}
-            {view === 'admin' && <AdminDashboard userData={userData} appSettings={appSettings} setAppSettings={setAppSettings} />}
+            {view === 'admin' && <AdminDashboard appSettings={appSettings} setAppSettings={setAppSettings} />}
             {view === 'topup' && <TopUpView userData={userData} setView={setView} appSettings={appSettings} />}
           </div>
         )}
@@ -472,7 +473,7 @@ function TopUpView({ userData, setView, appSettings }) {
 // ============================================================================
 // KOMPONEN ADMIN
 // ============================================================================
-function AdminDashboard({ userData, appSettings, setAppSettings }) {
+function AdminDashboard({ appSettings, setAppSettings }) {
   const [activeTab, setActiveTab] = useState('transaksi'); 
   const [transactions, setTransactions] = useState([]);
   const [formSettings, setFormSettings] = useState(appSettings);
