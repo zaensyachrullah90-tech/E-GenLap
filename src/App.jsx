@@ -4,44 +4,12 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 // =========================================================================
-// ⚙️ KONFIGURASI AMAN (MENGAMBIL DARI VERCEL ENVIRONMENT VARIABLES)
+// ⚙️ KONFIGURASI API GEMINI (Tetap di kode demi keamanan agar tidak bocor)
 // =========================================================================
-let _GEMINI_API_KEYS = [];
-let _WEBHOOK_GAS_URL = "";
-let _NOMOR_WA_ADMIN = "6285349450549"; 
-let _MASTER_DRIVE_LINK = "https://drive.google.com/drive/folders/1ky6sbBxgpmZ2uNEBqpLAFdYfdL7XTbOE";
-let _TEMPLATE_DOC_ID = "1xaw6bcjPr6mpcFfSvV2sd3ZVJHgtKLZ6UEO1PsgXU8A";
-let _REK_BCA = "1234 5678 90";
-let _REK_DANA = "0812 3456 7890";
-let _NAMA_REKENING = "Administrator E-GenLap";
-let _QRIS_URL = "https://drive.google.com/thumbnail?id=1DenWfIyBEbCrK1zaFHe_Xa9cHqfZXYCf&sz=w800";
-
-try {
-  // NOTE: Warning "import.meta is not available" mungkin muncul di preview, tetapi ini valid dan aman untuk Vite/Vercel.
-  const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
-  const rawKeys = env.VITE_GEMINI_KEYS || "";
-  _GEMINI_API_KEYS = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
-  if (env.VITE_WEBHOOK_GAS_URL) _WEBHOOK_GAS_URL = env.VITE_WEBHOOK_GAS_URL;
-  if (env.VITE_NOMOR_WA_ADMIN) _NOMOR_WA_ADMIN = env.VITE_NOMOR_WA_ADMIN;
-  if (env.VITE_MASTER_DRIVE_LINK) _MASTER_DRIVE_LINK = env.VITE_MASTER_DRIVE_LINK;
-  if (env.VITE_TEMPLATE_DOC_ID) _TEMPLATE_DOC_ID = env.VITE_TEMPLATE_DOC_ID;
-  if (env.VITE_REK_BCA) _REK_BCA = env.VITE_REK_BCA;
-  if (env.VITE_REK_DANA) _REK_DANA = env.VITE_REK_DANA;
-  if (env.VITE_NAMA_REKENING) _NAMA_REKENING = env.VITE_NAMA_REKENING;
-  if (env.VITE_QRIS_URL) _QRIS_URL = env.VITE_QRIS_URL;
-} catch (error) {
-  // Bypass saat di lingkungan preview lokal
-}
-
-const GEMINI_API_KEYS = _GEMINI_API_KEYS;
-const WEBHOOK_GAS_URL = _WEBHOOK_GAS_URL;
-const NOMOR_WA_ADMIN = _NOMOR_WA_ADMIN;
-const MASTER_DRIVE_LINK = _MASTER_DRIVE_LINK;
-const TEMPLATE_DOC_ID = _TEMPLATE_DOC_ID;
-const REK_BCA = _REK_BCA;
-const REK_DANA = _REK_DANA;
-const NAMA_REKENING = _NAMA_REKENING;
-const QRIS_URL = _QRIS_URL;
+const GEMINI_API_KEYS = [
+  "MASUKKAN_API_KEY_GEMINI_1_ANDA",
+  "MASUKKAN_API_KEY_GEMINI_2_ANDA"
+];
 
 // =========================================================================
 // FIREBASE CONFIG 
@@ -60,6 +28,20 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const currentAppId = "egenlap-app";
+
+// ==========================================
+// PENGATURAN DEFAULT SISTEM
+// ==========================================
+const defaultSettings = {
+  webhookUrl: "",
+  templateId: "1xaw6bcjPr6mpcFfSvV2sd3ZVJHgtKLZ6UEO1PsgXU8A",
+  masterDriveLink: "https://drive.google.com/drive/folders/1ky6sbBxgpmZ2uNEBqpLAFdYfdL7XTbOE",
+  noWa: "6285349450549",
+  rekBca: "1234 5678 90",
+  rekDana: "0812 3456 7890",
+  namaRek: "Administrator E-GenLap",
+  qrisUrl: "https://drive.google.com/thumbnail?id=1DenWfIyBEbCrK1zaFHe_Xa9cHqfZXYCf&sz=w800"
+};
 
 // ==========================================
 // MASTER DATA RHK 1-9
@@ -129,6 +111,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('login'); 
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [appSettings, setAppSettings] = useState(defaultSettings);
+  const [adminSettingsForm, setAdminSettingsForm] = useState(defaultSettings);
   
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: '', type: '' });
@@ -212,6 +196,25 @@ export default function App() {
     return () => { clearInterval(timer); unsub(); };
   }, []);
 
+  // MENGAMBIL PENGATURAN DARI FIREBASE SAAT APLIKASI DIMUAT
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const docRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'app_settings', 'config');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          setAppSettings(snap.data());
+          setAdminSettingsForm(snap.data());
+        } else {
+          await setDoc(docRef, defaultSettings);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchSettings();
+  }, []);
+
   useEffect(() => {
     if (userProfile && DATA_JABATAN[userProfile.jabatan]) {
       setRhkOptions(Object.keys(DATA_JABATAN[userProfile.jabatan]));
@@ -287,10 +290,10 @@ export default function App() {
     setLoading(true);
     try {
       const generateToken = 'SDM-' + Math.floor(1000 + Math.random() * 9000);
-      const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data_pekerja', generateToken);
+      const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'data_pekerja', generateToken);
       const payload = {
         token: generateToken, nama: regData.nama, nip: regData.nip, jabatan: regData.jabatan, 
-        email: regData.email, linkDrive: regData.linkDrive || MASTER_DRIVE_LINK,
+        email: regData.email, linkDrive: regData.linkDrive || appSettings.masterDriveLink,
         role: 'user', sisaToken: 1, status: 'Trial', createdAt: serverTimestamp() 
       };
       await setDoc(userRef, payload);
@@ -310,7 +313,7 @@ export default function App() {
         setUserProfile({ token: 'ADMIN-MASTER', nama: 'Administrator Utama', role: 'admin', sisaToken: 9999, status: 'aktif', jabatan: 'PENATA LAYANAN OPERASIONAL', email: 'admin@kemensos.go.id' });
         nav('dashboard');
       } else {
-        const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data_pekerja', token);
+        const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'data_pekerja', token);
         const snap = await getDoc(userRef);
         if (snap.exists()) {
           setUserProfile(snap.data());
@@ -331,7 +334,7 @@ export default function App() {
   // ------------------------------------------
   const loadRiwayat = async () => {
     try {
-      const snap = await getDocs(collection(db, 'artifacts', currentAppId, 'public', 'laporan_harian'));
+      const snap = await getDocs(collection(db, 'artifacts', currentAppId, 'public', 'data', 'laporan_harian'));
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const sorted = all.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
       setRiwayat(userProfile.role === 'admin' ? sorted : sorted.filter(r => r.profil?.token === userProfile.token));
@@ -340,14 +343,14 @@ export default function App() {
 
   const loadAllUsers = async () => {
     try {
-      const snap = await getDocs(collection(db, 'artifacts', currentAppId, 'public', 'data_pekerja'));
+      const snap = await getDocs(collection(db, 'artifacts', currentAppId, 'public', 'data', 'data_pekerja'));
       setAllUsers(snap.docs.map(d => d.data()).filter(u => u.token !== 'ADMIN-MASTER'));
     } catch(e) {}
   };
 
   const handleUpdateUserAdmin = async (userId, field, value) => {
     try {
-      const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data_pekerja', userId);
+      const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'data_pekerja', userId);
       await updateDoc(userRef, { [field]: value });
       showToastMsg('Data akun diperbarui', 'success');
       loadAllUsers(); 
@@ -361,11 +364,24 @@ export default function App() {
     if (isNaN(amount) || amount <= 0) return showToastMsg("Format tidak valid", "error");
     try {
       const newTotal = currentToken + amount;
-      const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data_pekerja', userId);
+      const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'data_pekerja', userId);
       await updateDoc(userRef, { sisaToken: newTotal, status: 'aktif' });
       showToastMsg(`Top-Up Sukses!`, 'success');
       loadAllUsers();
     } catch (err) { showToastMsg('Gagal Top-Up', 'error'); }
+  };
+
+  const handleSaveSettings = async () => {
+    setLoading(true);
+    try {
+      const docRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'app_settings', 'config');
+      await setDoc(docRef, adminSettingsForm);
+      setAppSettings(adminSettingsForm);
+      showToastMsg("Pengaturan berhasil disimpan", "success");
+    } catch(e) {
+      showToastMsg("Gagal menyimpan pengaturan", "error");
+    }
+    setLoading(false);
   };
 
   // ------------------------------------------
@@ -423,7 +439,7 @@ export default function App() {
   const generateAILogic = async () => {
     if (!formData.uraian || !formData.kegiatan) return showToastMsg('Pilih RHK & Isi Rincian Lapangan Dulu!', 'error');
     if (GEMINI_API_KEYS.length === 0 || !GEMINI_API_KEYS[0] || GEMINI_API_KEYS[0].includes("MASUKKAN_API_KEY")) {
-       return showToastMsg('Error: API Key belum diatur di Vercel/Kode!', 'error');
+       return showToastMsg('Error: API Key belum diatur!', 'error');
     }
 
     setLoading(true);
@@ -488,26 +504,26 @@ export default function App() {
         dynamicData: dynamicData,
         koleksiFoto: fotoBase64,
         lampiranPendukung: lampiranBase64,
-        profil: userProfile, laporan: { ...formData, aiResult: formData.aiResult }, timestamp: serverTimestamp(), templateId: TEMPLATE_DOC_ID, linkDrive: userProfile.linkDrive || MASTER_DRIVE_LINK
+        profil: userProfile, laporan: { ...formData, aiResult: formData.aiResult }, timestamp: serverTimestamp(), templateId: appSettings.templateId, linkDrive: userProfile.linkDrive || appSettings.masterDriveLink
       };
 
-      const docRef = await addDoc(collection(db, 'artifacts', currentAppId, 'public', 'laporan_harian'), payload);
+      const docRef = await addDoc(collection(db, 'artifacts', currentAppId, 'public', 'data', 'laporan_harian'), payload);
       
       if (userProfile.role !== 'admin') {
-        const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data_pekerja', userProfile.token);
+        const userRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'data_pekerja', userProfile.token);
         await updateDoc(userRef, { sisaToken: userProfile.sisaToken - 1 });
         setUserProfile({ ...userProfile, sisaToken: userProfile.sisaToken - 1 });
       }
 
-      if (WEBHOOK_GAS_URL && !WEBHOOK_GAS_URL.includes("MASUKKAN_URL")) {
-        fetch(WEBHOOK_GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({...payload, docId: docRef.id}) });
+      if (appSettings.webhookUrl && !appSettings.webhookUrl.includes("MASUKKAN_URL")) {
+        fetch(appSettings.webhookUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify({...payload, docId: docRef.id}) });
       }
 
       showToastMsg('Laporan Terkirim! (AI Mengeksekusi)', 'success');
       setFormData({ ...formData, uraian: '', aiResult: '' });
       setFotoBase64([]); setLampiranBase64([]); setTtdBase64(""); setArrSurat([]); setArrGraduasi([]); setArrP2K2([]);
       
-      nav('report');
+      nav('riwayat');
     } catch (e) { showToastMsg('Gagal mengirim ke server.', 'error'); }
     setLoading(false);
   };
@@ -967,7 +983,7 @@ export default function App() {
             </div>
             <div className="text-right">
                 <p className="text-lg font-black text-lime-400 mb-1">{p.harga}</p>
-                <button onClick={() => window.open(`https://wa.me/${NOMOR_WA_ADMIN}?text=Halo Admin, saya ingin beli ${p.nama} (${p.token} Token) untuk Token ID: ${userProfile.token}`, '_blank')} className="bg-green-600 text-white font-bold py-1.5 px-3 rounded-lg hover:bg-green-500 text-xs shadow-lg"><i className="fab fa-whatsapp"></i> Beli</button>
+                <button onClick={() => window.open(`https://wa.me/${appSettings.noWa}?text=Halo Admin, saya ingin beli ${p.nama} (${p.token} Token) untuk Token ID: ${userProfile.token}`, '_blank')} className="bg-green-600 text-white font-bold py-1.5 px-3 rounded-lg hover:bg-green-500 text-xs shadow-lg"><i className="fab fa-whatsapp"></i> Beli</button>
             </div>
           </div>
         ))}
@@ -975,13 +991,13 @@ export default function App() {
         <div className="border-t border-zinc-700 pt-4 mt-4">
           <div className="border-b border-white/5 pb-4">
             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2"><i className="fas fa-university text-lime-400"></i> Bank BCA</p>
-            <h3 className="text-2xl font-black text-white tracking-widest mb-1">{REK_BCA}</h3>
-            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">a.n {NAMA_REKENING}</p>
+            <h3 className="text-2xl font-black text-white tracking-widest mb-1">{appSettings.rekBca}</h3>
+            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">a.n {appSettings.namaRek}</p>
           </div>
           <div className="pt-4">
             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2"><i className="fas fa-qrcode text-lime-400"></i> DANA / QRIS</p>
-            <h3 className="text-2xl font-black text-lime-400 tracking-widest mb-1">{REK_DANA}</h3>
-            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">a.n {NAMA_REKENING}</p>
+            <h3 className="text-2xl font-black text-lime-400 tracking-widest mb-1">{appSettings.rekDana}</h3>
+            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">a.n {appSettings.namaRek}</p>
           </div>
         </div>
 
@@ -998,7 +1014,7 @@ export default function App() {
          <div className="mt-4 mb-6 bg-lime-900/20 p-4 rounded-xl border border-lime-500/30 text-center flex flex-col items-center">
              <p className="text-xs text-lime-300 mb-2 font-bold uppercase tracking-wider">Scan QRIS Untuk Top-up Token:</p>
              <div className="w-full max-w-[200px] h-48 bg-white rounded-xl flex items-center justify-center border-2 border-lime-500/50 shadow-[0_0_15px_rgba(132,204,22,0.3)] overflow-hidden">
-                {QRIS_URL ? <img src={QRIS_URL} alt="QRIS" className="w-full h-full object-contain" /> : <i className="fas fa-qrcode text-6xl text-black"></i>}
+                {appSettings.qrisUrl ? <img src={appSettings.qrisUrl} alt="QRIS" className="w-full h-full object-contain" /> : <i className="fas fa-qrcode text-6xl text-black"></i>}
              </div>
              <p className="text-[9px] text-zinc-400 mt-2">*Simpan struk & kirim ke WhatsApp Admin</p>
          </div>
@@ -1010,8 +1026,26 @@ export default function App() {
     <main className="p-5 flex-grow pb-28">
       <section className="glossy-monster p-5 rounded-2xl mb-6">
         <h2 className="text-lg font-bold text-lime-400 border-b border-zinc-700 pb-2"><i className="fas fa-cogs mr-2"></i> Panel Super Admin</h2>
-        <h3 className="text-sm font-bold text-white mt-6 mb-2">Manajemen User & Isi Token Manual</h3>
         
+        {/* PENGATURAN SISTEM GLOBAL (BARU) */}
+        <h3 className="text-sm font-bold text-white mt-4 mb-3 border-b border-zinc-700 pb-2"><i className="fas fa-sliders-h mr-2"></i> Pengaturan Sistem Global</h3>
+        <div className="space-y-4 mb-8">
+            <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">Webhook GAS URL (Pembuat PDF)</label><input type="text" value={adminSettingsForm.webhookUrl} onChange={e=>setAdminSettingsForm({...adminSettingsForm, webhookUrl:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+            <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">ID Template Google Docs</label><input type="text" value={adminSettingsForm.templateId} onChange={e=>setAdminSettingsForm({...adminSettingsForm, templateId:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+            <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">Link Drive Master Folder</label><input type="text" value={adminSettingsForm.masterDriveLink} onChange={e=>setAdminSettingsForm({...adminSettingsForm, masterDriveLink:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+            <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">Nomor WA Admin (Awalan 62)</label><input type="text" value={adminSettingsForm.noWa} onChange={e=>setAdminSettingsForm({...adminSettingsForm, noWa:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+            <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">Rekening BCA</label><input type="text" value={adminSettingsForm.rekBca} onChange={e=>setAdminSettingsForm({...adminSettingsForm, rekBca:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+                <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">Rekening DANA/QRIS</label><input type="text" value={adminSettingsForm.rekDana} onChange={e=>setAdminSettingsForm({...adminSettingsForm, rekDana:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+            </div>
+            <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">Nama Pemilik Rekening</label><input type="text" value={adminSettingsForm.namaRek} onChange={e=>setAdminSettingsForm({...adminSettingsForm, namaRek:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+            <div><label className="block text-[10px] font-bold text-zinc-400 mb-1">URL Gambar QRIS (Drive/Imgur)</label><input type="text" value={adminSettingsForm.qrisUrl} onChange={e=>setAdminSettingsForm({...adminSettingsForm, qrisUrl:e.target.value})} className="w-full p-2 text-xs rounded-lg glossy-input"/></div>
+            <button onClick={handleSaveSettings} disabled={loading} className="w-full bg-lime-600 text-black px-3 py-3 rounded-lg text-xs font-bold hover:bg-lime-500 shadow-md transition-all active:scale-95">
+                {loading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-save mr-2"></i> Simpan Pengaturan</>}
+            </button>
+        </div>
+
+        <h3 className="text-sm font-bold text-white mt-6 mb-2 border-b border-zinc-700 pb-2"><i className="fas fa-users mr-2"></i> Manajemen User & Token</h3>
         <div className="overflow-x-auto rounded-lg border border-zinc-700">
             <table className="min-w-full text-left text-[10px] text-zinc-300">
              <thead className="bg-zinc-900/80 text-lime-400 border-b border-lime-500/20">
