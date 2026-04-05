@@ -19,6 +19,7 @@ const ENV = {
 // 🔥 FIREBASE SETUP
 // ============================================================================
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  const firebaseConfig = {
   apiKey: "AIzaSyAe-mQ8o9VQUE-bjvH1_zFF4BgJiZZ84B8",
   authDomain: "e-genlap.firebaseapp.com",
   databaseURL: "https://e-genlap-default-rtdb.firebaseio.com",
